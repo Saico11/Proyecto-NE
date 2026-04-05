@@ -757,9 +757,13 @@ const productos = [
     }
 ];
 
+const API = "http://localhost:3000";
+
 // VARIABLES GLOBALES
 let carrito = [];
 let productosFiltrados = [...productos];
+let usuarioActual = JSON.parse(localStorage.getItem('usuarioActual')) || null;
+let metodoPagoSeleccionado = null;
 
 // ELEMENTOS DEL DOM
 const productosContainer = document.getElementById('productos-container');
@@ -775,14 +779,12 @@ const categoriaTitulo = document.getElementById('categoria-titulo');
 // ============================================
 function mostrarInfo(seccion) {
     document.querySelectorAll('.info-section').forEach(s => s.style.display = 'none');
-    
+
     const seccionMostrar = document.getElementById(seccion);
     if (seccionMostrar) {
         seccionMostrar.style.display = 'block';
         categoriaTitulo.innerHTML = `<h2>${seccion.charAt(0).toUpperCase() + seccion.slice(1).replace('-', ' ')}</h2>`;
         productosContainer.innerHTML = '';
-        
-        // Scroll suave a la sección
         seccionMostrar.scrollIntoView({ behavior: 'smooth' });
     }
 }
@@ -792,24 +794,24 @@ function mostrarInfo(seccion) {
 // ============================================
 function filtrarProductos(categoria, deporte) {
     document.querySelectorAll('.info-section').forEach(s => s.style.display = 'none');
-    
-    productosFiltrados = productos.filter(p => 
+
+    productosFiltrados = productos.filter(p =>
         p.categoria === categoria && p.deporte === deporte
     );
-    
+
     let titulo = '';
     if (categoria === 'camisetas') titulo = 'CAMISETAS';
     else if (categoria === 'zapatillas') titulo = 'ZAPATILLAS';
     else if (categoria === 'polos') titulo = 'POLOS';
-    
+
     let deporteTitulo = '';
     if (deporte === 'futbol') deporteTitulo = 'FÚTBOL';
     else if (deporte === 'basquet') deporteTitulo = 'BÁSQUET';
     else if (deporte === 'voley') deporteTitulo = 'VÓLEY';
-    
+
     categoriaTitulo.innerHTML = `<h2>${titulo} DE ${deporteTitulo} (${productosFiltrados.length} productos)</h2>`;
     mostrarProductos(productosFiltrados);
-    
+
     if (productosFiltrados.length === 0) {
         productosContainer.innerHTML = '<div class="no-productos"><i class="fas fa-box-open"></i><p>No hay productos disponibles</p></div>';
     }
@@ -827,12 +829,12 @@ function mostrarTodos() {
 // ============================================
 function mostrarProductos(productosAMostrar) {
     productosContainer.innerHTML = '';
-    
+
     productosAMostrar.forEach(producto => {
         const card = document.createElement('div');
         card.className = 'producto-card';
         card.onclick = () => verDetalle(producto.id);
-        
+
         card.innerHTML = `
             <div class="producto-imagen">
                 <div class="vista-1" style="background-image: url('${producto.vistas.frente}')"></div>
@@ -853,18 +855,20 @@ function mostrarProductos(productosAMostrar) {
                 </button>
             </div>
         `;
-        
+
         productosContainer.appendChild(card);
     });
 }
 
 // ============================================
-// FUNCIONES DEL MODAL
+// FUNCIONES DEL MODAL DE PRODUCTO
 // ============================================
 function verDetalle(id) {
     const producto = productos.find(p => p.id === id);
     const modalBody = document.getElementById('modal-body');
-    
+
+    if (!producto || !modalBody) return;
+
     modalBody.innerHTML = `
         <div class="modal-imagenes">
             <img src="${producto.vistas.frente}" alt="${producto.nombre}" class="modal-imagen">
@@ -886,7 +890,7 @@ function verDetalle(id) {
             </button>
         </div>
     `;
-    
+
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
 }
@@ -901,8 +905,10 @@ function cerrarModal() {
 // ============================================
 function agregarAlCarrito(id) {
     const producto = productos.find(p => p.id === id);
+    if (!producto) return;
+
     const itemExistente = carrito.find(item => item.id === id);
-    
+
     if (itemExistente) {
         if (itemExistente.cantidad < producto.stock) {
             itemExistente.cantidad++;
@@ -922,7 +928,7 @@ function agregarAlCarrito(id) {
         });
         mostrarNotificacion(`✓ ${producto.nombre} agregado al carrito`);
     }
-    
+
     actualizarCarrito();
 }
 
@@ -930,33 +936,35 @@ function eliminarDelCarrito(id) {
     const producto = carrito.find(item => item.id === id);
     carrito = carrito.filter(item => item.id !== id);
     actualizarCarrito();
-    mostrarNotificacion(`✗ ${producto.nombre} eliminado del carrito`);
+    if (producto) mostrarNotificacion(`✗ ${producto.nombre} eliminado del carrito`);
 }
 
 function actualizarCantidad(id, nuevaCantidad) {
     const item = carrito.find(item => item.id === id);
-    if (item) {
-        if (nuevaCantidad <= 0) {
-            eliminarDelCarrito(id);
-        } else if (nuevaCantidad <= item.stock) {
-            item.cantidad = nuevaCantidad;
-            actualizarCarrito();
-        } else {
-            mostrarNotificacion('Stock máximo alcanzado', 'error');
-        }
+    if (!item) return;
+
+    if (nuevaCantidad <= 0) {
+        eliminarDelCarrito(id);
+    } else if (nuevaCantidad <= item.stock) {
+        item.cantidad = nuevaCantidad;
+        actualizarCarrito();
+    } else {
+        mostrarNotificacion('Stock máximo alcanzado', 'error');
     }
 }
 
 function actualizarCarrito() {
     const totalItems = carrito.reduce((sum, item) => sum + item.cantidad, 0);
-    cartCount.textContent = totalItems;
-    
+    if (cartCount) cartCount.textContent = totalItems;
+
+    if (!cartItems || !cartTotal) return;
+
     cartItems.innerHTML = '';
     let total = 0;
-    
+
     carrito.forEach(item => {
         total += item.precio * item.cantidad;
-        
+
         const itemHTML = `
             <div class="cart-item">
                 <img src="${item.imagen}" alt="${item.nombre}" class="cart-item-img">
@@ -974,159 +982,147 @@ function actualizarCarrito() {
                 </div>
             </div>
         `;
-        
+
         cartItems.innerHTML += itemHTML;
     });
-    
+
     cartTotal.textContent = `S/ ${total.toFixed(2)}`;
 }
 
 function toggleCart() {
-    cartSidebar.classList.toggle('active');
-}
-
-function procesarCompra() {
-    if (carrito.length === 0) {
-        mostrarNotificacion('El carrito está vacío', 'error');
-        return;
+    if (cartSidebar) {
+        cartSidebar.classList.toggle('active');
     }
-    
-    const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
-    const totalItems = carrito.reduce((sum, item) => sum + item.cantidad, 0);
-    
-    mostrarNotificacion(`¡Compra realizada! ${totalItems} productos - Total: S/ ${total.toFixed(2)}`);
-    
-    carrito = [];
-    actualizarCarrito();
-    toggleCart();
 }
 
 // ============================================
-// FUNCIÓN DE NOTIFICACIÓN
+// NOTIFICACIONES
 // ============================================
 function mostrarNotificacion(mensaje, tipo = 'success') {
     const notificacion = document.createElement('div');
     notificacion.className = 'notificacion';
     notificacion.textContent = mensaje;
-    
+
     if (tipo === 'error') {
         notificacion.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+    } else if (tipo === 'info') {
+        notificacion.style.background = 'linear-gradient(135deg, #17a2b8, #138496)';
     }
-    
+
     document.body.appendChild(notificacion);
-    
+
     setTimeout(() => {
         notificacion.style.animation = 'slideOutRight 0.3s';
-        setTimeout(() => {
-            notificacion.remove();
-        }, 300);
+        setTimeout(() => notificacion.remove(), 300);
     }, 3000);
 }
 
 // ============================================
-// FUNCIÓN DE BÚSQUEDA
+// BÚSQUEDA
 // ============================================
-document.querySelector('.search-box i').addEventListener('click', function() {
-    const termino = document.querySelector('.search-box input').value.toLowerCase().trim();
-    
+document.querySelector('.search-box i')?.addEventListener('click', function() {
+    const termino = document.querySelector('.search-box input')?.value.toLowerCase().trim() || '';
+
     if (termino === '') {
         mostrarTodos();
         return;
     }
-    
-    const resultados = productos.filter(p => 
-        p.nombre.toLowerCase().includes(termino) || 
+
+    const resultados = productos.filter(p =>
+        p.nombre.toLowerCase().includes(termino) ||
         p.descripcion.toLowerCase().includes(termino) ||
         p.categoria.includes(termino) ||
         p.deporte.includes(termino)
     );
-    
+
     productosFiltrados = resultados;
     categoriaTitulo.innerHTML = `<h2>RESULTADOS: "${termino}" (${resultados.length} productos)</h2>`;
     mostrarProductos(resultados);
-    
+
     if (resultados.length === 0) {
         productosContainer.innerHTML = '<div class="no-productos"><i class="fas fa-search"></i><p>No se encontraron productos</p></div>';
     }
 });
 
-document.querySelector('.search-box input').addEventListener('keypress', function(e) {
+document.querySelector('.search-box input')?.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
-        document.querySelector('.search-box i').click();
+        document.querySelector('.search-box i')?.click();
     }
 });
 
 // ============================================
-// EVENTOS Y INICIALIZACIÓN
-// ============================================
-window.onclick = function(event) {
-    if (event.target === modal) {
-        cerrarModal();
-    }
-}
-
-document.addEventListener('click', function(e) {
-    if (!cartSidebar.contains(e.target) && !e.target.closest('.cart-icon') && cartSidebar.classList.contains('active')) {
-        toggleCart();
-    }
-});
-
-// Inicializar mostrando todos los productos
-mostrarTodos();
-
-// ============================================
-// VARIABLES DE USUARIO Y AUTENTICACIÓN
-// ============================================
-let usuarioActual = null;
-let usuariosRegistrados = JSON.parse(localStorage.getItem('usuarios')) || [];
-let metodoPagoSeleccionado = null;
-
-// ============================================
-// FUNCIONES DEL SIDEBAR DE USUARIO
+// SIDEBAR / MODAL USUARIO
 // ============================================
 function toggleUserSidebar() {
     const sidebar = document.getElementById('user-sidebar');
+    if (!sidebar) return;
+
     sidebar.classList.toggle('active');
+
+    if (sidebar.classList.contains('active')) {
+        actualizarUIUsuario();
+    }
 }
 
 function abrirAuthModal() {
-    document.getElementById('auth-modal').style.display = 'block';
-    toggleUserSidebar(); // Cerrar sidebar
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) authModal.style.display = 'block';
+
+    document.getElementById('user-sidebar')?.classList.remove('active');
+    cambiarTab('login');
 }
 
 function abrirRegistro() {
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) authModal.style.display = 'block';
+
+    document.getElementById('user-sidebar')?.classList.remove('active');
     cambiarTab('register');
-    document.getElementById('auth-modal').style.display = 'block';
-    toggleUserSidebar();
 }
 
 function cerrarAuthModal() {
-    document.getElementById('auth-modal').style.display = 'none';
-    // Limpiar formularios
-    document.getElementById('login-form').reset();
-    document.getElementById('register-form').reset();
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) authModal.style.display = 'none';
+
+    document.getElementById('login-form-element')?.reset();
+    document.getElementById('register-form-element')?.reset();
+
+    const strengthBar = document.querySelector('.strength-bar');
+    if (strengthBar) {
+        strengthBar.style.width = '0%';
+        strengthBar.style.background = '#ddd';
+    }
 }
 
 // ============================================
-// CAMBIAR TABS DE LOGIN/REGISTRO
+// CAMBIAR TABS LOGIN / REGISTER
 // ============================================
 function cambiarTab(tab) {
     const loginTab = document.getElementById('login-tab');
     const registerTab = document.getElementById('register-tab');
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
-    
+
     if (tab === 'login') {
-        loginTab.classList.add('active');
-        registerTab.classList.remove('active');
-        loginForm.classList.add('active');
-        registerForm.classList.remove('active');
+        loginTab?.classList.add('active');
+        registerTab?.classList.remove('active');
+        loginForm?.classList.add('active');
+        registerForm?.classList.remove('active');
     } else {
-        registerTab.classList.add('active');
-        loginTab.classList.remove('active');
-        registerForm.classList.add('active');
-        loginForm.classList.remove('active');
+        registerTab?.classList.add('active');
+        loginTab?.classList.remove('active');
+        registerForm?.classList.add('active');
+        loginForm?.classList.remove('active');
     }
+}
+
+// ============================================
+// MOSTRAR / OCULTAR CONTRASEÑA
+// ============================================
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
 }
 
 // ============================================
@@ -1135,16 +1131,17 @@ function cambiarTab(tab) {
 document.getElementById('reg-password')?.addEventListener('input', function(e) {
     const password = e.target.value;
     const strengthBar = document.querySelector('.strength-bar');
+    if (!strengthBar) return;
+
     let strength = 0;
-    
     if (password.length >= 8) strength += 25;
-    if (password.match(/[a-z]/)) strength += 25;
-    if (password.match(/[A-Z]/)) strength += 25;
-    if (password.match(/[0-9]/)) strength += 15;
-    if (password.match(/[^a-zA-Z0-9]/)) strength += 10;
-    
+    if (/[a-z]/.test(password)) strength += 25;
+    if (/[A-Z]/.test(password)) strength += 25;
+    if (/[0-9]/.test(password)) strength += 15;
+    if (/[^a-zA-Z0-9]/.test(password)) strength += 10;
+
     strengthBar.style.width = strength + '%';
-    
+
     if (strength < 30) {
         strengthBar.style.background = '#dc3545';
     } else if (strength < 60) {
@@ -1155,183 +1152,12 @@ document.getElementById('reg-password')?.addEventListener('input', function(e) {
 });
 
 // ============================================
-// MOSTRAR/OCULTAR CONTRASEÑA
-// ============================================
-function togglePassword(inputId) {
-    const input = document.getElementById(inputId);
-    const type = input.type === 'password' ? 'text' : 'password';
-    input.type = type;
-}
-
-// ============================================
-// REGISTRO DE USUARIO - VERSIÓN MEJORADA
-// ============================================
-function registrarUsuario() {
-    // Obtener valores del formulario
-    const nombres = document.getElementById('reg-nombres')?.value.trim();
-    const apellidos = document.getElementById('reg-apellidos')?.value.trim();
-    const email = document.getElementById('reg-email')?.value.trim();
-    const telefono = document.getElementById('reg-telefono')?.value.trim();
-    const password = document.getElementById('reg-password')?.value;
-    const confirmPassword = document.getElementById('reg-confirm-password')?.value;
-    const acceptTerms = document.getElementById('accept-terms')?.checked;
-    
-    // Validar que todos los campos existan
-    if (!nombres || !apellidos || !email || !telefono || !password || !confirmPassword) {
-        mostrarNotificacion('❌ Todos los campos son obligatorios', 'error');
-        return;
-    }
-    
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        mostrarNotificacion('❌ Ingresa un email válido', 'error');
-        document.getElementById('reg-email').focus();
-        return;
-    }
-    
-    // Validar teléfono (solo números, mínimo 9 dígitos)
-    const telefonoRegex = /^\d{9,}$/;
-    if (!telefonoRegex.test(telefono.replace(/\s/g, ''))) {
-        mostrarNotificacion('❌ Ingresa un teléfono válido (9 dígitos)', 'error');
-        document.getElementById('reg-telefono').focus();
-        return;
-    }
-    
-    // Validar longitud de contraseña
-    if (password.length < 8) {
-        mostrarNotificacion('❌ La contraseña debe tener al menos 8 caracteres', 'error');
-        document.getElementById('reg-password').focus();
-        return;
-    }
-    
-    // Validar que las contraseñas coincidan
-    if (password !== confirmPassword) {
-        mostrarNotificacion('❌ Las contraseñas no coinciden', 'error');
-        document.getElementById('reg-confirm-password').focus();
-        return;
-    }
-    
-    // Validar términos y condiciones
-    if (!acceptTerms) {
-        mostrarNotificacion('❌ Debes aceptar los términos y condiciones', 'error');
-        return;
-    }
-    
-    // Verificar si el email ya está registrado
-    const usuariosRegistrados = JSON.parse(localStorage.getItem('usuarios')) || [];
-    if (usuariosRegistrados.find(u => u.email === email)) {
-        mostrarNotificacion('❌ Este email ya está registrado', 'error');
-        return;
-    }
-    
-    // Mostrar estado de carga en el botón
-    const btn = document.getElementById('register-btn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CREANDO CUENTA...';
-    btn.disabled = true;
-    btn.classList.add('procesando');
-    
-    // Simular tiempo de procesamiento
-    setTimeout(() => {
-        // Crear nuevo usuario
-        const nuevoUsuario = {
-            id: Date.now(),
-            nombres,
-            apellidos,
-            email,
-            telefono: telefono.replace(/\s/g, ''),
-            password, // En producción, esto debería estar encriptado
-            fechaRegistro: new Date().toISOString(),
-            pedidos: [],
-            favoritos: [],
-            direcciones: []
-        };
-        
-        // Guardar en localStorage
-        usuariosRegistrados.push(nuevoUsuario);
-        localStorage.setItem('usuarios', JSON.stringify(usuariosRegistrados));
-        
-        // Iniciar sesión automáticamente
-        usuarioActual = nuevoUsuario;
-        actualizarUIUsuario();
-        
-        // Restaurar botón
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        btn.classList.remove('procesando');
-        
-        // Mostrar mensaje de éxito
-        mostrarNotificacion('✅ ¡Registro exitoso! Bienvenido ' + nombres, 'success');
-        
-        // Cerrar modal
-        cerrarAuthModal();
-        
-        // Limpiar formulario
-        document.getElementById('register-form-element')?.reset();
-        
-        // Actualizar el contador de usuarios (opcional)
-        console.log('Usuarios registrados:', usuariosRegistrados.length);
-        
-    }, 1500); // Simular 1.5 segundos de procesamiento
-}
-
-// ============================================
-// FUNCIÓN PARA LIMPIAR EL FORMULARIO
-// ============================================
-function limpiarFormularioRegistro() {
-    document.getElementById('reg-nombres').value = '';
-    document.getElementById('reg-apellidos').value = '';
-    document.getElementById('reg-email').value = '';
-    document.getElementById('reg-telefono').value = '';
-    document.getElementById('reg-password').value = '';
-    document.getElementById('reg-confirm-password').value = '';
-    document.getElementById('accept-terms').checked = false;
-    
-    // Limpiar barra de fortaleza
-    const strengthBar = document.querySelector('.strength-bar');
-    if (strengthBar) {
-        strengthBar.style.width = '0';
-    }
-}
-
-// ============================================
-// MEJORAR LA FUNCIÓN DE CAMBIO DE TABS
-// ============================================
-function cambiarTab(tab) {
-    const loginTab = document.getElementById('login-tab');
-    const registerTab = document.getElementById('register-tab');
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    
-    if (tab === 'login') {
-        loginTab.classList.add('active');
-        registerTab.classList.remove('active');
-        loginForm.classList.add('active');
-        registerForm.classList.remove('active');
-        
-        // Limpiar formulario de registro al cambiar
-        limpiarFormularioRegistro();
-    } else {
-        registerTab.classList.add('active');
-        loginTab.classList.remove('active');
-        registerForm.classList.add('active');
-        loginForm.classList.remove('active');
-        
-        // Limpiar formulario de login al cambiar
-        document.getElementById('login-email').value = '';
-        document.getElementById('login-password').value = '';
-    }
-}
-
-// ============================================
 // VALIDACIÓN EN TIEMPO REAL
 // ============================================
-// Validar email mientras se escribe
 document.getElementById('reg-email')?.addEventListener('input', function(e) {
     const email = e.target.value;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
+
     if (email && !emailRegex.test(email)) {
         e.target.style.borderColor = '#dc3545';
     } else if (email && emailRegex.test(email)) {
@@ -1341,20 +1167,18 @@ document.getElementById('reg-email')?.addEventListener('input', function(e) {
     }
 });
 
-// Validar teléfono mientras se escribe
 document.getElementById('reg-telefono')?.addEventListener('input', function(e) {
     let telefono = e.target.value.replace(/\D/g, '');
     if (telefono.length > 9) telefono = telefono.slice(0, 9);
-    
-    // Formatear como número de teléfono
+
     if (telefono.length > 6) {
         telefono = telefono.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
     } else if (telefono.length > 3) {
         telefono = telefono.replace(/(\d{3})(\d+)/, '$1 $2');
     }
-    
+
     e.target.value = telefono;
-    
+
     if (telefono.replace(/\s/g, '').length === 9) {
         e.target.style.borderColor = '#28a745';
     } else if (telefono) {
@@ -1365,46 +1189,137 @@ document.getElementById('reg-telefono')?.addEventListener('input', function(e) {
 });
 
 // ============================================
-// INICIAR SESIÓN
+// REGISTRO CON BACKEND
 // ============================================
-function iniciarSesion() {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    
+async function registrarUsuario() {
+    const nombres = document.getElementById('reg-nombres')?.value.trim();
+    const apellidos = document.getElementById('reg-apellidos')?.value.trim();
+    const email = document.getElementById('reg-email')?.value.trim().toLowerCase();
+    const telefono = document.getElementById('reg-telefono')?.value.trim().replace(/\s/g, '');
+    const password = document.getElementById('reg-password')?.value;
+    const confirmPassword = document.getElementById('reg-confirm-password')?.value;
+    const acceptTerms = document.getElementById('accept-terms')?.checked;
+
+    if (!nombres || !apellidos || !email || !telefono || !password || !confirmPassword) {
+        mostrarNotificacion('Todos los campos son obligatorios', 'error');
+        return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        mostrarNotificacion('Ingresa un correo válido', 'error');
+        return;
+    }
+
+    if (!/^\d{9}$/.test(telefono)) {
+        mostrarNotificacion('El teléfono debe tener 9 dígitos', 'error');
+        return;
+    }
+
+    if (password.length < 8) {
+        mostrarNotificacion('La contraseña debe tener al menos 8 caracteres', 'error');
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        mostrarNotificacion('Las contraseñas no coinciden', 'error');
+        return;
+    }
+
+    if (!acceptTerms) {
+        mostrarNotificacion('Debes aceptar los términos y condiciones', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('register-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CREANDO CUENTA...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`${API}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nombres,
+                apellidos,
+                email,
+                telefono,
+                password
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(data.message || 'No se pudo registrar');
+        }
+
+        usuarioActual = data.user;
+        localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+
+        actualizarUIUsuario();
+        cerrarAuthModal();
+        mostrarNotificacion(data.message || 'Registro exitoso', 'success');
+    } catch (error) {
+        console.error('Error en registro:', error);
+        mostrarNotificacion(error.message || 'Error al registrar', 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+// ============================================
+// LOGIN CON BACKEND
+// ============================================
+async function iniciarSesion() {
+    const email = document.getElementById('login-email')?.value.trim().toLowerCase();
+    const password = document.getElementById('login-password')?.value;
+
     if (!email || !password) {
         mostrarNotificacion('Ingresa tu email y contraseña', 'error');
         return;
     }
-    
-    const usuario = usuariosRegistrados.find(u => u.email === email && u.password === password);
-    
-    if (usuario) {
-        usuarioActual = usuario;
+
+    try {
+        const response = await fetch(`${API}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(data.message || 'Login incorrecto');
+        }
+
+        usuarioActual = data.user;
+        localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+
         actualizarUIUsuario();
-        mostrarNotificacion('¡Bienvenido ' + usuario.nombres + '!');
         cerrarAuthModal();
-    } else {
-        mostrarNotificacion('Email o contraseña incorrectos', 'error');
-        document.getElementById('login-password').style.borderColor = '#dc3545';
-        document.getElementById('login-password').style.animation = 'shake 0.3s';
-        setTimeout(() => {
-            document.getElementById('login-password').style.animation = '';
-        }, 300);
+        mostrarNotificacion(`Hola ${usuarioActual.nombres || usuarioActual.name}`, 'success');
+    } catch (error) {
+        console.error('Error en login:', error);
+        mostrarNotificacion(error.message || 'Error al iniciar sesión', 'error');
     }
 }
 
 // ============================================
-// CERRAR SESIÓN
+// LOGOUT
 // ============================================
 function cerrarSesion() {
     usuarioActual = null;
+    localStorage.removeItem('usuarioActual');
     actualizarUIUsuario();
-    mostrarNotificacion('Sesión cerrada');
-    toggleUserSidebar();
+    mostrarNotificacion('Sesión cerrada correctamente', 'success');
+    document.getElementById('user-sidebar')?.classList.remove('active');
 }
 
 // ============================================
-// ACTUALIZAR INTERFAZ SEGÚN USUARIO
+// UI DE USUARIO
 // ============================================
 function actualizarUIUsuario() {
     const userStatus = document.getElementById('user-status');
@@ -1413,206 +1328,136 @@ function actualizarUIUsuario() {
     const userStats = document.getElementById('user-stats');
     const userName = document.getElementById('user-name');
     const userEmail = document.getElementById('user-email');
-    
-    console.log("Actualizando UI para usuario:", usuarioActual); // Para debug
-    
+    const pedidosCount = document.getElementById('pedidos-count');
+    const favoritosCount = document.getElementById('favoritos-count');
+    const puntosValue = document.getElementById('puntos-value');
+
     if (usuarioActual) {
-        // Usuario logueado
-        userStatus.classList.add('logged-in');
-        
-        // Mostrar menú de registrado
-        userMenuInvitado.style.display = 'none';
-        userMenuRegistrado.style.display = 'flex';
-        userStats.style.display = 'grid';
-        
-        // Actualizar información del usuario
-        userName.textContent = usuarioActual.nombres + ' ' + usuarioActual.apellidos;
-        userEmail.textContent = usuarioActual.email;
-        
-        // Actualizar estadísticas (con datos de ejemplo si no existen)
-        const pedidosCount = usuarioActual.pedidos ? usuarioActual.pedidos.length : 0;
-        const favoritosCount = usuarioActual.favoritos ? usuarioActual.favoritos.length : 0;
-        const puntos = pedidosCount * 100;
-        
-        document.getElementById('pedidos-count').textContent = pedidosCount;
-        document.getElementById('favoritos-count').textContent = favoritosCount;
-        document.getElementById('puntos-value').textContent = puntos;
-        
-        // Mostrar notificación de bienvenida solo si acaba de iniciar sesión
-        if (!usuarioActual._notificado) {
-            mostrarNotificacion('👋 ¡Bienvenido ' + usuarioActual.nombres + '!', 'success');
-            usuarioActual._notificado = true;
-        }
+        userStatus?.classList.add('logged-in');
+
+        if (userMenuInvitado) userMenuInvitado.style.display = 'none';
+        if (userMenuRegistrado) userMenuRegistrado.style.display = 'flex';
+        if (userStats) userStats.style.display = 'grid';
+
+        if (userName) userName.textContent = usuarioActual.name || `${usuarioActual.nombres || ''} ${usuarioActual.apellidos || ''}`.trim();
+        if (userEmail) userEmail.textContent = usuarioActual.email || '';
+
+        if (pedidosCount) pedidosCount.textContent = '-';
+        if (favoritosCount) favoritosCount.textContent = '0';
+        if (puntosValue) puntosValue.textContent = '-';
     } else {
-        // Invitado
-        userStatus.classList.remove('logged-in');
-        
-        // Mostrar menú de invitado
-        userMenuInvitado.style.display = 'flex';
-        userMenuRegistrado.style.display = 'none';
-        userStats.style.display = 'none';
-        
-        // Información por defecto
-        userName.textContent = 'Invitado';
-        userEmail.textContent = 'No has iniciado sesión';
+        userStatus?.classList.remove('logged-in');
+
+        if (userMenuInvitado) userMenuInvitado.style.display = 'flex';
+        if (userMenuRegistrado) userMenuRegistrado.style.display = 'none';
+        if (userStats) userStats.style.display = 'none';
+
+        if (userName) userName.textContent = 'Invitado';
+        if (userEmail) userEmail.textContent = 'No has iniciado sesión';
     }
 }
 
 // ============================================
-// MEJORAR LA FUNCIÓN DE REGISTRO
-// ============================================
-function registrarUsuario() {
-    console.log("Función registrarUsuario ejecutándose");
-    
-    // Obtener valores
-    const nombres = document.getElementById('reg-nombres')?.value;
-    const apellidos = document.getElementById('reg-apellidos')?.value;
-    const email = document.getElementById('reg-email')?.value;
-    const telefono = document.getElementById('reg-telefono')?.value;
-    const password = document.getElementById('reg-password')?.value;
-    const confirmPassword = document.getElementById('reg-confirm-password')?.value;
-    const acceptTerms = document.getElementById('accept-terms')?.checked;
-    
-    // Validación básica
-    if (!nombres || !apellidos || !email || !telefono || !password) {
-        mostrarNotificacion('❌ Todos los campos son obligatorios', 'error');
-        return;
-    }
-    
-    if (password !== confirmPassword) {
-        mostrarNotificacion('❌ Las contraseñas no coinciden', 'error');
-        return;
-    }
-    
-    if (!acceptTerms) {
-        mostrarNotificacion('❌ Debes aceptar los términos y condiciones', 'error');
-        return;
-    }
-    
-    // Mostrar loading en el botón
-    const btn = document.getElementById('register-btn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CREANDO CUENTA...';
-    btn.disabled = true;
-    
-    // Simular tiempo de procesamiento
-    setTimeout(() => {
-        // Crear usuario
-        const nuevoUsuario = {
-            id: Date.now(),
-            nombres: nombres,
-            apellidos: apellidos,
-            email: email,
-            telefono: telefono,
-            pedidos: [],
-            favoritos: [],
-            _notificado: false
-        };
-        
-        // Guardar en variable global
-        usuarioActual = nuevoUsuario;
-        
-        // Guardar en localStorage
-        const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-        usuarios.push(nuevoUsuario);
-        localStorage.setItem('usuarios', JSON.stringify(usuarios));
-        
-        // Actualizar UI
-        actualizarUIUsuario();
-        
-        // Restaurar botón
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        
-        // Cerrar modal
-        cerrarAuthModal();
-        
-        // Limpiar formulario
-        document.getElementById('register-form-element')?.reset();
-        
-        // Mostrar mensaje de éxito
-        mostrarNotificacion('✅ ¡Registro exitoso!', 'success');
-        
-    }, 1000);
-}
-
-// ============================================
-// FUNCIÓN PARA ABRIR EL SIDEBAR DE USUARIO
-// ============================================
-function toggleUserSidebar() {
-    const sidebar = document.getElementById('user-sidebar');
-    sidebar.classList.toggle('active');
-    
-    // Si el sidebar se abre y hay usuario, actualizar stats
-    if (sidebar.classList.contains('active') && usuarioActual) {
-        actualizarUIUsuario();
-    }
-}
-
-// ============================================
-// FUNCIONES DEL MENÚ DE USUARIO
+// OPCIONES PANEL USUARIO
 // ============================================
 function verPerfil() {
-    mostrarNotificacion('📝 Funcionalidad de perfil en desarrollo', 'info');
-    toggleUserSidebar();
+    if (!usuarioActual) {
+        mostrarNotificacion('Debes iniciar sesión', 'error');
+        return;
+    }
+
+    alert(
+        `MI PERFIL\n\n` +
+        `Nombre: ${usuarioActual.name || `${usuarioActual.nombres || ''} ${usuarioActual.apellidos || ''}`.trim()}\n` +
+        `Correo: ${usuarioActual.email || ''}\n` +
+        `Teléfono: ${usuarioActual.telefono || ''}`
+    );
+
+    document.getElementById('user-sidebar')?.classList.remove('active');
 }
 
-function verPedidos() {
-    if (usuarioActual && usuarioActual.pedidos && usuarioActual.pedidos.length > 0) {
-        let mensaje = '📦 TUS PEDIDOS:\n\n';
-        usuarioActual.pedidos.forEach((p, index) => {
-            mensaje += `${index + 1}. Código: GOL-${p.codigo || Date.now()}\n`;
-            mensaje += `   Total: S/ ${p.total || 0}\n`;
-            mensaje += `   Fecha: ${p.fecha || new Date().toLocaleDateString()}\n\n`;
-        });
-        alert(mensaje);
-    } else {
-        mostrarNotificacion('📦 No tienes pedidos aún', 'info');
+async function verPedidos() {
+    if (!usuarioActual) {
+        mostrarNotificacion('Debes iniciar sesión', 'error');
+        return;
     }
-    toggleUserSidebar();
+
+    try {
+        const response = await fetch(`${API}/orders/${usuarioActual.id}`);
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(data.message || 'No se pudieron cargar los pedidos');
+        }
+
+        if (!data.orders || data.orders.length === 0) {
+            mostrarNotificacion('No tienes pedidos aún', 'info');
+            document.getElementById('user-sidebar')?.classList.remove('active');
+            return;
+        }
+
+        let mensaje = 'MIS PEDIDOS\n\n';
+        data.orders.forEach((pedido, i) => {
+            mensaje += `${i + 1}. ${pedido.name}\n`;
+            mensaje += `   Fecha: ${new Date(pedido.date_order).toLocaleString('es-PE')}\n`;
+            mensaje += `   Total: S/ ${Number(pedido.amount_total).toFixed(2)}\n`;
+            mensaje += `   Estado: ${pedido.state}\n\n`;
+        });
+
+        alert(mensaje);
+    } catch (error) {
+        console.error('Error al cargar pedidos:', error);
+        mostrarNotificacion(error.message || 'Error al cargar pedidos', 'error');
+    }
+
+    document.getElementById('user-sidebar')?.classList.remove('active');
 }
 
 function verDirecciones() {
-    mostrarNotificacion('📍 Funcionalidad de direcciones en desarrollo', 'info');
-    toggleUserSidebar();
+    mostrarNotificacion('Módulo de direcciones en desarrollo', 'info');
+    document.getElementById('user-sidebar')?.classList.remove('active');
 }
 
 function verFavoritos() {
-    if (usuarioActual && usuarioActual.favoritos && usuarioActual.favoritos.length > 0) {
-        mostrarNotificacion(`❤️ Tienes ${usuarioActual.favoritos.length} productos favoritos`, 'info');
-    } else {
-        mostrarNotificacion('❤️ No tienes favoritos aún', 'info');
-    }
-    toggleUserSidebar();
-}
-
-function cerrarSesion() {
-    usuarioActual = null;
-    actualizarUIUsuario();
-    mostrarNotificacion('👋 Sesión cerrada correctamente', 'info');
-    toggleUserSidebar();
+    mostrarNotificacion('Módulo de favoritos en desarrollo', 'info');
+    document.getElementById('user-sidebar')?.classList.remove('active');
 }
 
 // ============================================
-// VERIFICAR AL CARGAR LA PÁGINA
+// LOGIN SOCIAL / UTILIDADES
 // ============================================
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("Página cargada - Inicializando...");
-    
-    // Verificar si hay usuario en localStorage
-    const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-    if (usuarios.length > 0) {
-        // No auto-login, solo tener disponibles
-        console.log("Usuarios disponibles:", usuarios.length);
-    }
-    
-    // Asegurar que el botón de usuario está enlazado
-    const userIcon = document.querySelector('.user-icon');
-    if (userIcon && !userIcon.getAttribute('onclick')) {
-        userIcon.setAttribute('onclick', 'toggleUserSidebar()');
-    }
-});
+function socialLogin(red) {
+    mostrarNotificacion(`Login con ${red} no implementado en esta demo`, 'info');
+}
 
+function recuperarContrasena() {
+    const email = prompt('Ingresa tu email para recuperar contraseña:');
+    if (email) {
+        mostrarNotificacion('Función demo: revisa el backend para implementar recuperación', 'info');
+    }
+}
+
+function mostrarTerminos() {
+    alert('TÉRMINOS Y CONDICIONES\n\n1. Los productos son 100% originales\n2. Las devoluciones se aceptan hasta 7 días después de la compra\n3. Los precios incluyen IGV');
+}
+
+function mostrarPrivacidad() {
+    alert('POLÍTICA DE PRIVACIDAD\n\nTus datos están seguros con nosotros. No compartimos información con terceros.');
+}
+
+// ============================================
+// PROCESO DE COMPRA
+// ============================================
+function procesarCompra() {
+    if (!usuarioActual) {
+        mostrarNotificacion('Debes iniciar sesión para comprar', 'error');
+        toggleCart();
+        abrirAuthModal();
+        return;
+    }
+
+    abrirPagoModal();
+}
 
 // ============================================
 // FUNCIONES DE PAGO
@@ -1622,31 +1467,31 @@ function abrirPagoModal() {
         mostrarNotificacion('El carrito está vacío', 'error');
         return;
     }
-    
-    // Actualizar resumen de compra
+
     actualizarResumenCompra();
-    
-    // Resetear progreso
-    document.getElementById('step1').classList.add('active');
-    document.getElementById('step2').classList.remove('active', 'completed');
-    document.getElementById('step3').classList.remove('active', 'completed');
-    
-    document.getElementById('step1-content').classList.add('active');
-    document.getElementById('step2-content').classList.remove('active');
-    document.getElementById('step3-content').classList.remove('active');
-    
+
+    document.getElementById('step1')?.classList.add('active');
+    document.getElementById('step2')?.classList.remove('active', 'completed');
+    document.getElementById('step3')?.classList.remove('active', 'completed');
+
+    document.getElementById('step1-content')?.classList.add('active');
+    document.getElementById('step2-content')?.classList.remove('active');
+    document.getElementById('step3-content')?.classList.remove('active');
+
     document.getElementById('pago-modal').style.display = 'block';
-    toggleCart(); // Cerrar carrito
+    toggleCart();
 }
 
 function actualizarResumenCompra() {
     const resumenItems = document.getElementById('resumen-items');
+    if (!resumenItems) return;
+
     const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
     const envio = 15.00;
     const total = subtotal + envio;
-    
+
     resumenItems.innerHTML = '';
-    
+
     carrito.forEach(item => {
         const itemHTML = `
             <div class="resumen-item">
@@ -1660,50 +1505,50 @@ function actualizarResumenCompra() {
         `;
         resumenItems.innerHTML += itemHTML;
     });
-    
+
     document.getElementById('resumen-subtotal').textContent = `S/ ${subtotal.toFixed(2)}`;
     document.getElementById('resumen-envio').textContent = `S/ ${envio.toFixed(2)}`;
     document.getElementById('resumen-total').textContent = `S/ ${total.toFixed(2)}`;
 }
 
 function irAPaso2() {
-    document.getElementById('step1').classList.remove('active');
-    document.getElementById('step1').classList.add('completed');
-    document.getElementById('step2').classList.add('active');
-    
-    document.getElementById('step1-content').classList.remove('active');
-    document.getElementById('step2-content').classList.add('active');
-    
-    // Scroll al inicio del modal
-    document.querySelector('.pago-modal-content').scrollTop = 0;
+    document.getElementById('step1')?.classList.remove('active');
+    document.getElementById('step1')?.classList.add('completed');
+    document.getElementById('step2')?.classList.add('active');
+
+    document.getElementById('step1-content')?.classList.remove('active');
+    document.getElementById('step2-content')?.classList.add('active');
+
+    document.querySelector('.pago-modal-content')?.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function volverAPaso1() {
-    document.getElementById('step2').classList.remove('active');
-    document.getElementById('step1').classList.add('active');
-    document.getElementById('step1').classList.remove('completed');
-    
-    document.getElementById('step2-content').classList.remove('active');
-    document.getElementById('step1-content').classList.add('active');
+    document.getElementById('step2')?.classList.remove('active');
+    document.getElementById('step1')?.classList.add('active');
+    document.getElementById('step1')?.classList.remove('completed');
+
+    document.getElementById('step2-content')?.classList.remove('active');
+    document.getElementById('step1-content')?.classList.add('active');
 }
 
-function seleccionarMetodo(metodo) {
+function seleccionarMetodo(metodo, elemento = null) {
     metodoPagoSeleccionado = metodo;
-    
-    // Remover selección anterior
+
     document.querySelectorAll('.metodo-pago-card').forEach(card => {
         card.classList.remove('selected');
     });
-    
-    // Ocultar todos los formularios
+
     document.querySelectorAll('.metodo-form').forEach(form => {
         form.style.display = 'none';
     });
-    
-    // Seleccionar el método actual
-    event.currentTarget.classList.add('selected');
-    
-    // Mostrar formulario correspondiente
+
+    if (elemento) {
+        elemento.classList.add('selected');
+    } else {
+        const target = document.getElementById(`${metodo}-form`)?.closest('.metodo-pago-card');
+        target?.classList.add('selected');
+    }
+
     const formId = metodo + '-form';
     const form = document.getElementById(formId);
     if (form) {
@@ -1717,73 +1562,75 @@ function formatearTarjeta(input) {
     input.value = value;
 }
 
-function procesarPago() {
+async function registrarCompraBackend() {
+    if (!usuarioActual || !carrito.length) {
+        throw new Error('No hay usuario o carrito para registrar compra');
+    }
+
+    const response = await fetch(`${API}/buy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user_id: usuarioActual.id,
+            carrito: carrito,
+            metodoPago: metodoPagoSeleccionado
+        })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'No se pudo registrar la compra en Odoo');
+    }
+
+    return data.order;
+}
+
+async function procesarPago() {
     if (!metodoPagoSeleccionado) {
         mostrarNotificacion('Selecciona un método de pago', 'error');
         return;
     }
-    
-    // Simular procesamiento de pago
-    mostrarNotificacion('Procesando pago...');
-    
-    setTimeout(() => {
-        // Generar código de pedido
-        const codigoPedido = Math.floor(100000 + Math.random() * 900000);
-        
-        // Actualizar paso 3
-        document.getElementById('codigo-pedido').textContent = codigoPedido;
-        document.getElementById('total-pagado').textContent = document.getElementById('resumen-total').textContent;
-        
+
+    try {
+        mostrarNotificacion('Procesando pago...');
+
+        const order = await registrarCompraBackend();
+
+        document.getElementById('codigo-pedido').textContent = order.codigo || 'SIN-CODIGO';
+        document.getElementById('total-pagado').textContent = `S/ ${Number(order.total || 0).toFixed(2)}`;
+
         let metodoTexto = '';
-        switch(metodoPagoSeleccionado) {
+        switch (metodoPagoSeleccionado) {
             case 'tarjeta': metodoTexto = 'Tarjeta de Crédito/Débito'; break;
             case 'yape': metodoTexto = 'Yape'; break;
             case 'plin': metodoTexto = 'Plin'; break;
             case 'transferencia': metodoTexto = 'Transferencia Bancaria'; break;
             case 'efectivo': metodoTexto = 'Efectivo (Contra entrega)'; break;
+            default: metodoTexto = 'No especificado';
         }
+
         document.getElementById('metodo-pagado').textContent = metodoTexto;
-        
-        const fecha = new Date();
-        document.getElementById('fecha-pago').textContent = fecha.toLocaleDateString('es-PE', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        // Actualizar progreso
-        document.getElementById('step2').classList.remove('active');
-        document.getElementById('step2').classList.add('completed');
-        document.getElementById('step3').classList.add('active');
-        
-        document.getElementById('step2-content').classList.remove('active');
-        document.getElementById('step3-content').classList.add('active');
-        
-        // Guardar pedido en historial del usuario
-        if (usuarioActual) {
-            const pedido = {
-                codigo: codigoPedido,
-                fecha: new Date().toISOString(),
-                items: [...carrito],
-                total: parseFloat(document.getElementById('resumen-total').textContent.replace('S/ ', '')),
-                metodoPago: metodoTexto,
-                estado: 'Confirmado'
-            };
-            usuarioActual.pedidos.push(pedido);
-            localStorage.setItem('usuarios', JSON.stringify(usuariosRegistrados));
-        }
-        
-        // Vaciar carrito
+        document.getElementById('fecha-pago').textContent = new Date().toLocaleString('es-PE');
+
+        document.getElementById('step2')?.classList.remove('active');
+        document.getElementById('step2')?.classList.add('completed');
+        document.getElementById('step3')?.classList.add('active');
+
+        document.getElementById('step2-content')?.classList.remove('active');
+        document.getElementById('step3-content')?.classList.add('active');
+
         carrito = [];
         actualizarCarrito();
-        
-        // Animación de éxito
-        document.querySelector('.check-animation i').style.animation = 'pulse 0.5s';
-        
-        mostrarNotificacion('¡Pago exitoso! Código: GOL-' + codigoPedido);
-    }, 2000);
+
+        const checkIcon = document.querySelector('.check-animation i');
+        if (checkIcon) checkIcon.style.animation = 'pulse 0.5s';
+
+        mostrarNotificacion(`¡Pago exitoso! Pedido: ${order.codigo}`, 'success');
+    } catch (error) {
+        console.error('Error al procesar pago:', error);
+        mostrarNotificacion(error.message || 'Error al procesar pago', 'error');
+    }
 }
 
 function cerrarPagoModal() {
@@ -1791,99 +1638,72 @@ function cerrarPagoModal() {
     metodoPagoSeleccionado = null;
 }
 
-// ============================================
-// FUNCIONES DE PERFIL DE USUARIO
-// ============================================
-function verPerfil() {
-    mostrarNotificacion('Funcionalidad de perfil en desarrollo');
-    toggleUserSidebar();
+async function verPedido() {
+    cerrarPagoModal();
+    await verPedidos();
 }
 
-function verPedidos() {
-    if (usuarioActual && usuarioActual.pedidos.length > 0) {
-        let mensaje = 'Tus pedidos:\n';
-        usuarioActual.pedidos.forEach(p => {
-            mensaje += `GOL-${p.codigo} - ${p.fecha.split('T')[0]} - S/ ${p.total}\n`;
-        });
-        alert(mensaje);
-    } else {
-        mostrarNotificacion('No tienes pedidos aún', 'error');
+// ============================================
+// EVENTOS GLOBALES
+// ============================================
+window.onclick = function(event) {
+    if (event.target === modal) {
+        cerrarModal();
     }
-    toggleUserSidebar();
-}
 
-function verDirecciones() {
-    mostrarNotificacion('Funcionalidad de direcciones en desarrollo');
-    toggleUserSidebar();
-}
+    const authModal = document.getElementById('auth-modal');
+    const pagoModal = document.getElementById('pago-modal');
 
-function verFavoritos() {
-    mostrarNotificacion('Funcionalidad de favoritos en desarrollo');
-    toggleUserSidebar();
-}
-
-function socialLogin(red) {
-    mostrarNotificacion(`Iniciando sesión con ${red}... (Demo)`);
-    
-    // Simulación de login social
-    setTimeout(() => {
-        const usuarioDemo = {
-            id: Date.now(),
-            nombres: red === 'google' ? 'Usuario' : 'Facebook User',
-            apellidos: red,
-            email: `usuario@${red}.com`,
-            telefono: '999999999',
-            password: 'social',
-            fechaRegistro: new Date().toISOString(),
-            pedidos: [],
-            favoritos: [],
-            direcciones: []
-        };
-        
-        usuarioActual = usuarioDemo;
-        actualizarUIUsuario();
-        mostrarNotificacion(`¡Bienvenido ${usuarioDemo.nombres}!`);
+    if (event.target === authModal) {
         cerrarAuthModal();
-    }, 1000);
-}
-
-function recuperarContrasena() {
-    const email = prompt('Ingresa tu email para recuperar contraseña:');
-    if (email) {
-        mostrarNotificacion('Se ha enviado un enlace a ' + email);
     }
-}
 
-function mostrarTerminos() {
-    alert('TÉRMINOS Y CONDICIONES\n\n1. Los productos son 100% originales\n2. Las devoluciones se aceptan hasta 7 días después de la compra\n3. Los precios incluyen IGV');
-}
+    if (event.target === pagoModal) {
+        cerrarPagoModal();
+    }
+};
 
-function mostrarPrivacidad() {
-    alert('POLÍTICA DE PRIVACIDAD\n\nTus datos están seguros con nosotros. No compartimos información con terceros.');
-}
-
-// ============================================
-// MODIFICAR FUNCIÓN EXISTENTE DE COMPRA
-// ============================================
-// Reemplazar la función procesarCompra() anterior con esta:
-function procesarCompra() {
-    if (!usuarioActual) {
-        mostrarNotificacion('Debes iniciar sesión para comprar', 'error');
+document.addEventListener('click', function(e) {
+    if (
+        cartSidebar &&
+        !cartSidebar.contains(e.target) &&
+        !e.target.closest('.cart-icon') &&
+        cartSidebar.classList.contains('active')
+    ) {
         toggleCart();
-        abrirAuthModal();
-        return;
     }
-    
-    abrirPagoModal();
-}
+
+    const userSidebar = document.getElementById('user-sidebar');
+    if (
+        userSidebar &&
+        !userSidebar.contains(e.target) &&
+        !e.target.closest('.user-icon') &&
+        userSidebar.classList.contains('active')
+    ) {
+        userSidebar.classList.remove('active');
+    }
+});
 
 // ============================================
-// INICIALIZAR
+// INICIALIZACIÓN
 // ============================================
-// Verificar si hay usuario en localStorage al cargar
 document.addEventListener('DOMContentLoaded', function() {
-    // Comprobar si hay un usuario guardado (para demo)
-    if (usuariosRegistrados.length > 0) {
-        // No iniciar sesión automáticamente, solo tenerlos disponibles
-    }
+    mostrarTodos();
+    actualizarCarrito();
+    actualizarUIUsuario();
+
+    document.querySelectorAll('.metodo-pago-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const form = this.querySelector('.metodo-form');
+            let metodo = 'efectivo';
+
+            if (form?.id) {
+                metodo = form.id.replace('-form', '');
+            } else if (this.textContent.toLowerCase().includes('efectivo')) {
+                metodo = 'efectivo';
+            }
+
+            seleccionarMetodo(metodo, this);
+        });
+    });
 });
